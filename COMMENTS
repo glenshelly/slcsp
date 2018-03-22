@@ -13,16 +13,18 @@ The instructions below for building the application assume that Maven is availab
 
 ## Building the application with Maven
 
-Run the maven install phase from the root of the application
+Run the maven install phase from the root of the application:
 
+```
 > mvn package
+```
 
 This will create a slcsp_finder.jar in ./target/
 
 
 ## Running the application
 
-To run the application, execute the slcsp_finder jar with a single parameter, as follows: 
+To run the application, execute the slcsp_finder jar with a single parameter, as follows:
 
 ```
 > java  -jar  target/slcsp_finder.jar  <the-single-parameter>
