@@ -11,6 +11,7 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,6 +27,8 @@ import java.util.stream.Stream;
  */
 public class SlcspFinder {
 
+    private static final String SILVER_PLAN_IDENTIFYING_NAME = "Silver";
+
     /**
      * Required argument: file location
      *
@@ -33,7 +36,7 @@ public class SlcspFinder {
      */
     public static void main(String args[]) {
         if (args == null || args.length < 1) {
-            throw new IllegalStateException("The location of the data must be specified as the first argument");
+            throw new IllegalStateException("The location of the data must be specified as the first argument.");
         }
         SlcspFinder slcspFinder = new SlcspFinder();
         String baseDirWithFinalSeparator = args[0].endsWith(File.separator) ? args[0] : args[0] + File.separator;
@@ -50,14 +53,16 @@ public class SlcspFinder {
 
         String inputAndOutputFile = "slcsp.csv";
 
-        // Read in the zipcodes from Slcsp.csv
+        // Read in the inpuut zipcodes from Slcsp.csv - it's these codes we'll want to find the SLCSP for
         List<String> slcspInputList = buildInputList(baseDirWithFinalSeparator, inputAndOutputFile);
 
-        // Get the relevant (sliver) planAreas from plans.sv.  Key will be planArea, value is slcsp.
-        Map<String, Float> planareaMap = buildPlanAreaMapOfSlcsp(baseDirWithFinalSeparator);
+        // Get the relevant (silver) rateareas from plans.sv. 
+        // Map.key=ratearea, map.value=slcsp.
+        Map<String, Float> rateareaMap = buildRateareaMapOfSlcsp(baseDirWithFinalSeparator);
 
-        // Build the final zip:slcsp map, using previous data and zips.csv.  Key is zip code, value is the matching slcsp
-        Map<String, Float> zipToSlcspMap = buildZipToSlcspPriceMap(baseDirWithFinalSeparator, slcspInputList, planareaMap);
+        // Build the final zip:slcsp map, using previous data and zips.csv. 
+        // Map.key=zip code, map.value=matching slcsp
+        Map<String, Float> zipToSlcspMap = buildZipToSlcspPriceMap(baseDirWithFinalSeparator, slcspInputList, rateareaMap);
 
         // Overwrite the input file with the results
         writeOutResults(baseDirWithFinalSeparator, inputAndOutputFile, slcspInputList, zipToSlcspMap);
@@ -75,10 +80,14 @@ public class SlcspFinder {
         List<String> slcspList = new ArrayList<>();
         String filespec = baseDir + inputFileName;
         try (
-                BufferedReader br = new BufferedReader(new FileReader(filespec));
+                BufferedReader br = new BufferedReader(new FileReader(filespec))
         ) {
-            // skip the first header line
-            String line = br.readLine();
+            /* Expected format:
+                zipcode,rate
+                64148,
+             */
+            br.readLine();   // skip the first header line
+            String line;
             while ((line = br.readLine()) != null) {
                 if (line.endsWith(",")) {
                     line = line.substring(0, line.length() - 1);
@@ -94,77 +103,86 @@ public class SlcspFinder {
     }
 
     /**
+     * Return slcsp, by rate area (State + number)
      * @param baseDir
-     * @return a plan area map, with key=the plan area (State + Number) and value=2nd lowest cost for that area.
+     * @return a rate area map, with key=the rate area (State + Number) and value=2nd lowest cost for that area.
      * Will only include silver plans.
      */
-    private Map<String, Float> buildPlanAreaMapOfSlcsp(String baseDir) {
+    private Map<String, Float> buildRateareaMapOfSlcsp(String baseDir) {
         long start = System.currentTimeMillis();
-        Map<String, Float> planareaMap = new HashMap<>();
+        Map<String, Float> rateareaMap = new HashMap<>();
         String fileSpec = baseDir + "plans.csv";
         try (
-                Stream<String> stream = Files.lines(Paths.get(fileSpec));
+                Stream<String> stream = Files.lines(Paths.get(fileSpec))
         ) {
             // The stream will include the header row, but it will be tossed out since it's not a silver plan
             Map<String, List<SilverPlanData>> groupedMap =
                     stream
-                            .map(this::makeSilverPlanObjectFromInput)
+                            .map(this::parseInputStringIntoSilverPlanObject)
                             .filter(Objects::nonNull)
-                            .collect(Collectors.groupingBy(SilverPlanData::getAreaCode));
+                            .collect(Collectors.groupingBy(SilverPlanData::getRateAreaCode));
             groupedMap.entrySet().stream()
-                    .filter(x -> x.getValue().size() >= 2)
-                    .map(x -> {
-
+                .filter(x -> x.getValue().size() >= 2)
+                    .forEach((Map.Entry<String, List<SilverPlanData>> x) -> {
                         Collections.sort(x.getValue());
-                        return x;
-                    })
-                    .forEach(x -> planareaMap.put(x.getKey(), x.getValue().get(0).planCost));
-
+                        rateareaMap.put(x.getKey(), x.getValue().get(0).planCost);
+                    });
         } catch (IOException e) {
             e.printStackTrace();
-            throw new IllegalStateException("Problem loading planarea file ('" + fileSpec + "'): " + e);
+            throw new IllegalStateException("Problem loading ratearea file ('" + fileSpec + "'): " + e);
         }
 
-        renderMessage((System.currentTimeMillis() - start) + "ms to get " + planareaMap.size() + " plan areas in map");
-        return planareaMap;
+        renderMessage((System.currentTimeMillis() - start) + "ms to get " + rateareaMap.size() + " rate areas in map");
+
+        return rateareaMap;
     }
 
 
     /**
      * @param baseDir
      * @param slcspInputList
-     * @param planareaMap
+     * @param rateareaMap
      * @return a map with key=zipcode and value=the slcsp price.  Will only return items for which the slcsp was determined.
      */
     private Map<String, Float> buildZipToSlcspPriceMap(String baseDir, List<String> slcspInputList,
-                                                       Map<String, Float> planareaMap) {
+                                                       Map<String, Float> rateareaMap) {
         long start = System.currentTimeMillis();
         Set<String> slcspSet = new HashSet<>(slcspInputList);
         Map<String, Float> zipToSlcspMap = new HashMap<>();
         String fileSpec = baseDir + "zips.csv";
         try (
-                Stream<String> stream = Files.lines(Paths.get(fileSpec));
-
+                Stream<String> stream = Files.lines(Paths.get(fileSpec))
         ) {
-            // The stream will include the header row, but it will be tossed out, since it won't include a valid zip
-            Map<String, List<ZipPlanAreaData>> zipGroupedMap =
+            /*
+             The stream will include the header row, but it will be tossed out, since it won't include a valid zip
+             map key = zip code; map value: Set of RateAreas
+
+             note: input file might have the same rate area in 2 zips, with different counties
+                   and so the same zip will appear 2x in the file.  Putting the resulting ZipRateareaData object into
+                   a Set (with appropriate .equals implementation) will eliminate this duplication)
+            */
+            Map<String, Set<ZipRateareaData>> zipGroupedMap =
                     stream
-                            .map(this::makeZipToPlanObjectFromInput)
-                            .filter(x -> planareaMap.get(x.areaCode) != null)
+                            .map(this::parseInputStringIntoZipToRateObject)
+                            .filter(x -> rateareaMap.get(x.rateAreaCode) != null)
                             .filter(x -> slcspSet.contains(x.getZip()))
-                            .collect(Collectors.groupingBy(ZipPlanAreaData::getZip));
+                            .collect(Collectors.groupingBy(ZipRateareaData::getZip, Collectors.toSet() ));
             for (String zipCode : zipGroupedMap.keySet()) {
-                // skip it if there's more than 1
-                List<ZipPlanAreaData> matchingObjects = zipGroupedMap.get(zipCode);
-                if (matchingObjects.size() == 1) {
-                    String areaCodeForZip = matchingObjects.get(0).areaCode;
-                    Float secondLowestForArea = planareaMap.get(areaCodeForZip);
+                // skip it if there's more than two rate areas represented for the single zip code
+                Set<ZipRateareaData> rateAreasForSingleZipcode = zipGroupedMap.get(zipCode);
+                if (rateAreasForSingleZipcode.size() == 1) {
+                    String areaCodeForZip = rateAreasForSingleZipcode.iterator().next().getRateAreaCode();
+                    Float secondLowestForArea = rateareaMap.get(areaCodeForZip);
                     if (null == secondLowestForArea) {
                         // this should never happen
-                        renderMessage("second lowest is null, for areaCode=" + areaCodeForZip);
+                        renderMessage("second lowest is null, for rateAreaCode=" + areaCodeForZip);
                     } else {
                         zipToSlcspMap.put(zipCode, secondLowestForArea);
                     }
+                } else {
+                    // ignore it - too many plans for this single area
+                    renderMessage("toss out " + rateAreasForSingleZipcode.size() + " rate areas for zip=" + zipCode + ": " + Arrays.toString(rateAreasForSingleZipcode.toArray()));
+                    // toss out zip codes that have more than one area
                 }
             }
         } catch (IOException e) {
@@ -193,8 +211,9 @@ public class SlcspFinder {
               OutputStream resultOutputStream = new FileOutputStream(filespec);
               PrintWriter resultPrintWriter = new PrintWriter(new OutputStreamWriter(resultOutputStream, "UTF-8")
               )) {
+            resultPrintWriter.println("zipcode,rate");
             slcspInputList.stream()
-                    .map(x -> x + "," + zipToSlcspMap.get(x))
+                    .map(x -> x + "," + (zipToSlcspMap.containsKey(x) ? zipToSlcspMap.get(x) : ""))
                     .forEach(resultPrintWriter::println);
 
         } catch (IOException e) {
@@ -212,39 +231,40 @@ public class SlcspFinder {
         System.out.println(msg);
     }
 
-    private SilverPlanData makeSilverPlanObjectFromInput(String inputString) {
+    private SilverPlanData parseInputStringIntoSilverPlanObject(String inputString) {
           /*
                     plan_id,state,metal_level,rate,rate_area
                     74449NR9870320,GA,Silver,298.62,7
                  */
+        // StringTokenizer would be prettier, and slower
         char delimiter = ',';
         int firstComma = inputString.indexOf(delimiter);
         int secondComma = inputString.indexOf(delimiter, firstComma + 1);
         int thirdComma = inputString.indexOf(delimiter, secondComma + 1);
         int fourthComma = inputString.indexOf(delimiter, thirdComma + 1);
         String planType = inputString.substring(secondComma + 1, thirdComma);
-        boolean isSilver = "Silver".equals(planType);
+        boolean isSilver = SILVER_PLAN_IDENTIFYING_NAME.equals(planType);
 
         return isSilver ? new SilverPlanData(
                 inputString.substring(firstComma + 1, secondComma) + inputString.substring(fourthComma + 1),
                 Float.parseFloat(inputString.substring(thirdComma + 1, fourthComma))) : null;
     }
 
-    private ZipPlanAreaData makeZipToPlanObjectFromInput(String inputString) {
+    private ZipRateareaData parseInputStringIntoZipToRateObject(String inputString) {
         /*
             zipcode,state,county_code,name,rate_area
             36749,AL,01001,Autauga,11
          */
+        // StringTokenizer would be prettier, and slower
         char delimiter = ',';
         int firstComma = inputString.indexOf(delimiter);
         int secondComma = inputString.indexOf(delimiter, firstComma + 1);
         int thirdComma = inputString.indexOf(delimiter, secondComma + 1);
         int fourthComma = inputString.indexOf(delimiter, thirdComma + 1);
 
-        ZipPlanAreaData zipPlanAreaData = new ZipPlanAreaData(
+        return new ZipRateareaData(
                 inputString.substring(firstComma + 1, secondComma) + inputString.substring(fourthComma + 1),
                 inputString.substring(0, firstComma));
-        return zipPlanAreaData;
     }
 
 
@@ -253,35 +273,59 @@ public class SlcspFinder {
      */
     class SilverPlanData implements Comparable {
         float planCost;
-        String areaCode;
+        String rateAreaCode;
 
-        SilverPlanData(String areaCode, float planCost) {
-            this.areaCode = areaCode;
+        SilverPlanData(String rateAreaCode, float planCost) {
+            this.rateAreaCode = rateAreaCode;
             this.planCost = planCost;
         }
 
-        String getAreaCode() {
-            return areaCode;
+        String getRateAreaCode() {
+            return rateAreaCode;
         }
 
         @Override
         public int compareTo(Object o) {
             SilverPlanData givenSpd = (SilverPlanData) o;
-            return Float.compare(givenSpd.planCost, this.planCost);
+            return Float.compare(this.planCost, givenSpd.planCost);
         }
     }
 
-    class ZipPlanAreaData {
+    class ZipRateareaData {
         String zip;
-        String areaCode;
+        String rateAreaCode;
 
-        ZipPlanAreaData(String areaCode, String zip) {
-            this.areaCode = areaCode;
+        ZipRateareaData(String rateAreaCode, String zip) {
+            this.rateAreaCode = rateAreaCode;
             this.zip = zip;
         }
 
         String getZip() {
             return zip;
+        }
+
+        String getRateAreaCode() {
+            return rateAreaCode;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ZipRateareaData that = (ZipRateareaData) o;
+            return Objects.equals(zip, that.zip) &&
+                    Objects.equals(rateAreaCode, that.rateAreaCode);
+        }
+
+        @Override
+        public int hashCode() {
+
+            return Objects.hash(zip, rateAreaCode);
+        }
+
+        @Override
+        public String toString() {
+            return zip + ':'  + rateAreaCode;
         }
     }
 
