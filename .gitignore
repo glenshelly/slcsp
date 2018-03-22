@@ -1,0 +1,31 @@
+# Eclipse
+.classpath
+.project
+.settings/
+.metadata/
+
+# Intellij
+.idea/
+.ideaDataSources/
+*.iml
+*.iws
+*.ids
+*.ipr
+.shelf/
+.idea/workspace.xml
+
+# Mac
+.DS_Store
+
+# JRebel
+rebel.xml
+
+# Maven
+log/
+target/
+
+.gitconfig
+
+dataSources/
+
+dependency-reduced-pom.xml
