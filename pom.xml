@@ -39,12 +39,14 @@
                         <goals>
                             <goal>single</goal>
                         </goals>
+
                     </execution>
                 </executions>
                 <configuration>
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
+                    <attach>false</attach>
                     <finalName>slcsp_finder</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
                     <archive>

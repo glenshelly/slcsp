@@ -22,10 +22,27 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Find the Slcsp for given zip codes.
+ * Find the Slcsp for a set of zip codes in a given file.
+ * <p>
+ * The functionality in the process() method of this class uses data in 3 input files (location specifed
+ * by a program arguement), and writes the results to the same directory, overwriting one of the input files.
+ * <p>
+ * A full description of the expected funcdtionality can be found here: https://github.com/adhocteam/homework/tree/master/slcsp
  *
- * This implementation assumes the given limited use case, namely, a file with (only) 51 zip codes that we want to find the
- * data for.
+ * Here's a summary of the approach:
+ *
+ * 1. Marshal the zipcodes we need to find values for into a List
+ *      - simple reading in of slcsp.csv (conains zip codes)
+ *
+ * 2. Marshal the SLCSP values for area codes into a map
+ *      - reading in of plans.csv (contains plans-details & rate area codes)
+ *      - filter out values we don't care about (e.g., anything that's not the slcsp)
+ *
+ * 3. Marshal the SLCSP values for the zip codes we care about into a map
+ *      - reading in of zips.csv (contains rate area codes and zip codes)
+ *      - filter out values we don't care about (e.g., zip codes with more than one rate area)
+ *
+ * 4. Loop through the initial zipcodes we care about, and write out the results
  */
 @SuppressWarnings("ALL")
 public class SlcspFinder {
@@ -57,19 +74,34 @@ public class SlcspFinder {
         long start = System.currentTimeMillis();
         String inputAndOutputFileName = "slcsp.csv";
 
-        // Read in the input zipcodes from slcsp.csv - it's these codes we'll want to find the SLCSP for
+        /*
+         * 1. Marshal the zipcodes we need to find values for into a List
+         *      - simple reading in of slcsp.csv (conains zip codes)
+         */
         List<String> slcspInputList = buildInputList(baseDirWithFinalSeparator, inputAndOutputFileName);
 
-        // Get the relevant (silver) rateAreas from plans.sv. 
-        // Map.key=rateArea, map.value=slcsp.
-        Map<String, Float> rateAreaMap = buildRateAreaToSlcspMap(baseDirWithFinalSeparator);
 
-        // Build the final zip:slcsp map, using previous data and zips.csv. 
-        // Map.key=zip code, map.value=matching slcsp
-        Map<String, Float> zipToSlcspMap = buildZipToSlcspPriceMap(baseDirWithFinalSeparator, slcspInputList, rateAreaMap);
+        /*
+         * 2. Marshal the SLCSP values for area codes into a map
+         *      - reading in of plans.csv (contains plans-details & rate area codes)
+         *      - filter out values we don't care about (e.g., anything that's not the slcsp)
+         */
+        Map<String, Float> rateAreaToSlcspMap = buildRateAreaToSlcspMap(baseDirWithFinalSeparator);
 
-        // Overwrite the input file with the results
+
+        /*
+         * 3. Marshal the SLCSP values for the zip codes we care about into a map
+         *      - reading in of zips.csv (contains rate area codes and zip codes)
+         *      - filter out values we don't care about (e.g., zip codes with more than one rate area)
+         */
+        Map<String, Float> zipToSlcspMap = buildZipToSlcspPriceMap(baseDirWithFinalSeparator, slcspInputList, rateAreaToSlcspMap);
+
+
+        /*
+         * 4. Loop through the initial zipcodes we care about, and write out the results
+         */
         writeResults(baseDirWithFinalSeparator, inputAndOutputFileName, slcspInputList, zipToSlcspMap);
+
 
         renderMessage("\nComplete in " + (System.currentTimeMillis() - start) + "ms: Results written to: " + baseDirWithFinalSeparator + inputAndOutputFileName + "\n");
     }
@@ -101,29 +133,28 @@ public class SlcspFinder {
     }
 
     /**
-     * Return slcsp, by rate area (State + number)
+     * Get the (possible) slcsp by rate area
      * <p>
-     * Note that in rare cases, the value could be null, indicating that there was no slcsp
+     * It is possible that the value associated with a particular rate area is null, indicating that there was no slcsp
      *
      * @param baseDir
-     * @return a rate area map, with key=the rate area (State + Number) and value=2nd lowest silver-plan cost for that area.
+     * @return a rate area map, with key=rate area (State + Number) and value=slcsp for that rate area (if any)
      */
     private Map<String, Float> buildRateAreaToSlcspMap(String baseDir) {
         Map<String, Float> rateAreaMap;
         String fileSpec = baseDir + "plans.csv";
         try (
+                // The stream will initially include the header row, but that entry will filtered out, since its
+                // 'rate area' won't have 2 plans.
                 Stream<String> stream = Files.lines(Paths.get(fileSpec))
         ) {
-            /*
-              1. Group the CostData by RateArea infor into an interim map...
-
-                 (The stream includes the header row, but it will filtered out below: its 'rate area' won't have 2 plans.
-                 Collecting the RateAreaPlanCostData objects into a set eliminates any duplicate plans (in this case, plans with the same cost)
-            */
+            // 1. Group the CostData by RateArea information into an interim map...
             Map<String, Set<RateAreaPlanCostData>> rateAreaToMultiplePlanMap = stream
                     .map(this::parseInputStringIntoSilverPlanObject)
                     .filter(Objects::nonNull)
                     .collect(Collectors.groupingBy(RateAreaPlanCostData::getRateAreaCode, Collectors.toSet()));
+                    // Collecting the RateAreaPlanCostData objects into a set eliminates any duplicate plans
+                    // (in this case, a duplicate plan is defined as a plan that has the same cost)
 
             // 2. ...then get the the 2nd lowest plan (if any) for the Rate Area
             rateAreaMap = rateAreaToMultiplePlanMap.entrySet().stream()
@@ -150,39 +181,40 @@ public class SlcspFinder {
 
 
     /**
-     * Get the final necessary map, linking the zip codes to a slcsp price.
+     * Get the final map, linking the zip codes to a slcsp price.
+     *
      * @param baseDir
      * @param slcspInputList
-     * @param rateAreaMap    may contain null values
+     * @param rateAreaToSlcspMap    may contain null values
      * @return a map with key=zipcode and value=the slcsp price.  Will only return items for which the slcsp was determined.
      */
     private Map<String, Float> buildZipToSlcspPriceMap(String baseDir, List<String> slcspInputList,
-                                                       Map<String, Float> rateAreaMap) {
+                                                       Map<String, Float> rateAreaToSlcspMap) {
         Set<String> slcspSet = new HashSet<>(slcspInputList);
         Map<String, Float> zipToSlcspMap = new HashMap<>();
         String fileSpec = baseDir + "zips.csv";
         try (
+                // The stream will include the header row, it will be filtered out below: it won't include a valid zip.
                 Stream<String> stream = Files.lines(Paths.get(fileSpec))
         ) {
-            /*
-             1. Group the ZipRateAreaData objects by zip code into an interim map...
-
-                (The stream will include the header row, it will be filtered out below: it won't include a valid zip.
-                Collecting the ZipRateAreaData objects into a Set eliminates any duplicates.)
-            */
+            // 1. Group the ZipRateAreaData objects by zip code into an interim map...
             Map<String, Set<ZipRateAreaData>> zipGroupedMapByRateArea = stream
                     .map(this::parseInputStringIntoZipToRateObject)
-                    .filter(x -> rateAreaMap.get(x.rateAreaCode) != null)
+                    .filter(x -> rateAreaToSlcspMap.get(x.rateAreaCode) != null)
                     .filter(x -> slcspSet.contains(x.getZip()))
                     .collect(Collectors.groupingBy(ZipRateAreaData::getZip, Collectors.toSet()));
+                    // Collecting the ZipRateAreaData objects into a Set eliminates any duplicates.
+                    // (in this case, a duplicate ZipRateArea is one that has an identical Zip and Rate area,
+                    //  even if they have the different counties)
 
-            // 2.  ... then get the second-lowest-cost for particular zip codes.
+            // 2.  ...then get the second-lowest-cost for particular zip codes.
             for (String zipCode : zipGroupedMapByRateArea.keySet()) {
                 Set<ZipRateAreaData> rateAreasForSingleZipcode = zipGroupedMapByRateArea.get(zipCode);
                 // Skip if there's more than one rate area represented for the single zip code
                 if (rateAreasForSingleZipcode.size() == 1) {
-                    String areaCodeForZip = rateAreasForSingleZipcode.iterator().next().getRateAreaCode();
-                    Float secondLowestForArea = rateAreaMap.get(areaCodeForZip);
+                    // Get the single rate area, and see if there's a cost associated with it.  If so, add a map entry
+                    String rateAreaForZipcode = rateAreasForSingleZipcode.iterator().next().getRateAreaCode();
+                    Float secondLowestForArea = rateAreaToSlcspMap.get(rateAreaForZipcode);
                     if (null != secondLowestForArea) {
                         zipToSlcspMap.put(zipCode, secondLowestForArea);
                     }
@@ -227,7 +259,6 @@ public class SlcspFinder {
     }
 
     /**
-     *
      * @param inputString
      * @return an object based on the input String, if it's a Silver plan; else, null
      */
@@ -251,7 +282,6 @@ public class SlcspFinder {
     }
 
     /**
-     *
      * @param inputString
      * @return an object based on the input String.  Will not return null.
      */
