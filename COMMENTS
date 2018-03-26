@@ -12,7 +12,7 @@ Assumptions
 -----------
 The following software is assumed to be installed and available for the building and running of this application
 - Java 8
-- Maven
+- Maven, with a junit dependency
  
 
 Building the application with Maven
@@ -21,12 +21,23 @@ Run the maven package or install phase from the root of the application:
 
    > mvn clean package
 
-This will create the following jar file: ./target/slcsp_finder.jar
+This will compile the code and create the following jar file: ./target/slcsp_finder.jar
+
+
+Testing the application
+-----------------------
+Use the following Maven command to test the actual output against the expected output:
+
+   > mvn clean test
+
+This test swaps in a backup copy of the original input file, processes it, and compares the results to a backup
+copy of the expected results.
 
 
 Running the application
 -----------------------
-To run the application, execute the slcsp_finder jar with a single parameter to specify the location of the input files
+To run the application, first package the application, as described above, and then execute
+the slcsp_finder jar with a single parameter to specify the location of the input files
 
    > java  -jar  target/slcsp_finder.jar  <input-file-location-parameter>
 
@@ -36,32 +47,44 @@ run the application as follows:
    > java -jar target/slcsp_finder.jar ./data 
 
 
-Results Location
+Results location
 ----------------
 The results will overwrite the original values in slcsp.csv
 
 
-Notes on the Implementation
+Running the application again
+-----------------------------
+Since running the application overwrites the input file (slcsp.csv) with a results file, a trivial bash script was
+written to copy the original input file back in place.  This allows the process to be run again, using a fresh
+copy of the input file.  The script can be run (in linux) with this command:
+
+   > ./preptest.sh
+
+
+Notes on the implementation
 ===========================
 
 Assumptions regarding the requirements
 --------------------------------------
 This implementation takes the requirements at face value and optimizes for getting results for the
-51 zip codes specified.
+51 zip codes specified.  If the real use case were to be able to support an API that returns the slcsp for
+any given zip code, a different approach would be needed.
 
-If the real use case were to be able to support an API that returns the slcsp for any given zip code,
-a different approach would likely work better.
+The processing of the input file is not quite idempotent since commas are appended to any input lines (other than
+the header line) that do not already end in a comma.  In this way, the result file, if processed again, will gain
+a comma after any of the slcsp values found in the first run through. If idempotency is required, the code could
+be easily adjusted to satisfy that requirement.
 
 
 Likely Improvements in real life
 --------------------------------
-Depending on the actual usage for this (a one-off script?  a production-grade application?), the
-following improvements might be appropriate:
+Depending on the actual usage for this (a one-off script?  a production-grade application?), the following
+improvements might be appropriate:
 
 - Use a properties file for such things as the input file location
-- Add junit/jmockit tests that run automatically during the build
-- Optimize for speed and memory usage, as appropriate
+- Additional junit or jmockit tests to examine a variety of scenarios
+- Optimize for speed and memory usage, as determined by profiling
 - Use a real logging system (e.g., log4j)
 
-These (and other) improvements were not made to the current implementation, with an eye towards
-not over-engineering a lightly-defined requirement.
+These (and other) improvements were not made to the current implementation, with an eye towards not over-engineering
+this POC.
