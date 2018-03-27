@@ -5,6 +5,7 @@ This application determines the Second Lowest Cost Silver Plan for a specified s
 on the requirements can be found here: https://github.com/adhocteam/homework/tree/master/slcsp
 
 
+
 Building and Running
 ====================
 
@@ -46,30 +47,32 @@ run the application as follows:
 
    > java -jar target/slcsp_finder.jar ./data
 
-In the zip file provided, ./data is, in fact, the location of the input files.
+In the zip file provided, ./data is, in fact, the location of the 3 input files, as well as the location of the
+output file (overwriting the slcsp.csv input file)
 
 
 Results location
 ----------------
-The results will overwrite the original values in slcsp.csv
+The results will overwrite the original values in ./data/slcsp.csv
 
 
 Results provided in the zip
 ---------------------------
-The zip file includes the results from a previous running of the application in this location:
+The zip file includes the results from a previous running of the application.  These resuults can be found here:
 
    /previous_results/slcsp.csv
 
-In contrast, the slcsp.csv packaged in the /data/ directory is "fresh", ready to be processed as described above.
+In contrast, the slcsp.csv packaged in ./data is "fresh", ready to be processed as described above.
 
 
-Running the application again
------------------------------
+Preparing to run the application again
+--------------------------------------
 Since running the application overwrites the input file (slcsp.csv) with a results file, a trivial bash script was
 written to copy the original input file back in place.  This allows the process to be run again, using a fresh
 copy of the input file.  The script can be run (in linux) by executing the following shell script:
 
    > ./preptest.sh
+
 
 
 Notes on the implementation
@@ -79,17 +82,17 @@ Assumptions regarding the requirements
 --------------------------------------
 This implementation takes the requirements at face value and optimizes for getting results for the
 51 zip codes specified.  If the real use case were to be able to support an API that returns the slcsp for
-any given zip code, a different approach would be needed.
+any given zip code, a different approach might be needed.
 
-The processing of the input file is not quite idempotent since commas are appended to any input lines (other than
-the header line) that do not already end in a comma.  In this way, the result file, if processed again, will gain
-a comma after any of the slcsp values found in the first run through. If idempotency is required, the code could
-be easily adjusted to satisfy that requirement.
+The processing of the input file is not quite idempotent: commas are appended to any input lines (other than
+the header line) that do not already end in a comma.  In this way, the result file, if processed subsequently as
+an input file, will gain a comma after any of the slcsp values found in the first iteration. If idempotency is
+required, the code could be adjusted to satisfy that requirement.
 
 
 Likely Improvements in real life
 --------------------------------
-Depending on the actual usage for this (a one-off script?  a production-grade application?), the following
+Depending on the actual usage for this (a one-off script? a production-grade application?), the following
 improvements might be appropriate:
 
 - Use a properties file for such things as the input file location
@@ -97,5 +100,5 @@ improvements might be appropriate:
 - Optimize for speed and memory usage, as determined by profiling
 - Use a real logging system (e.g., log4j)
 
-These (and other) improvements were not made to the current implementation, with an eye towards not over-engineering
-this POC.
+These and other improvements were not made to the current implementation, with an eye towards not over-engineering
+this proof of concept.
