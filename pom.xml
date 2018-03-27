@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>glen-group</groupId>
+    <groupId>homework-group</groupId>
     <artifactId>slcsp</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>Slcsp Finder</name>
@@ -61,7 +61,7 @@
                     <appendAssemblyId>false</appendAssemblyId>
                     <archive>
                         <manifest>
-                            <mainClass>com.glen.slcsp.SlcspFinder</mainClass>
+                            <mainClass>com.adhoc.slcsp.SlcspFinder</mainClass>
                             <addClasspath>true</addClasspath>
                         </manifest>
                     </archive>

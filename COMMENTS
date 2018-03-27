@@ -36,7 +36,7 @@ copy of the expected results.
 
 Running the application
 -----------------------
-To run the application, first package the application, as described above, and then execute
+To run the application, first package the application, as described above, and then run
 the slcsp_finder jar with a single parameter to specify the location of the input files
 
    > java  -jar  target/slcsp_finder.jar  <input-file-location-parameter>
@@ -44,7 +44,9 @@ the slcsp_finder jar with a single parameter to specify the location of the inpu
 For example, if the input files are in '/data" beneath the directory you're running the application in,
 run the application as follows: 
 
-   > java -jar target/slcsp_finder.jar ./data 
+   > java -jar target/slcsp_finder.jar ./data
+
+In the zip file provided, ./data is, in fact, the location of the input files.
 
 
 Results location
@@ -52,11 +54,20 @@ Results location
 The results will overwrite the original values in slcsp.csv
 
 
+Results provided in the zip
+---------------------------
+The zip file includes the results from a previous running of the application in this location:
+
+   /previous_results/slcsp.csv
+
+In contrast, the slcsp.csv packaged in the /data/ directory is "fresh", ready to be processed as described above.
+
+
 Running the application again
 -----------------------------
 Since running the application overwrites the input file (slcsp.csv) with a results file, a trivial bash script was
 written to copy the original input file back in place.  This allows the process to be run again, using a fresh
-copy of the input file.  The script can be run (in linux) with this command:
+copy of the input file.  The script can be run (in linux) by executing the following shell script:
 
    > ./preptest.sh
 

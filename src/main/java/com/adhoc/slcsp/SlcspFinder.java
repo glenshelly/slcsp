@@ -1,4 +1,4 @@
-package com.glen.slcsp;
+package com.adhoc.slcsp;
 
 import java.io.BufferedReader;
 import java.io.File;
